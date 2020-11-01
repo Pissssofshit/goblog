@@ -1,6 +1,7 @@
 package main
 
 import (
+	"goblog/middleware"
 	"goblog/model"
 	"goblog/service"
 
@@ -19,11 +20,13 @@ func main() {
 	db.AutoMigrate(&model.Article{})
 	db.AutoMigrate(&model.Comment{})
 
+	var userService service.UserService
+	var articleService service.ArticleService
+	var commentService service.CommentService
 	api := router.Group("/api")
+
+	api.Use(middleware.JWTAuth())
 	{
-		var userService service.UserService
-		var articleService service.ArticleService
-		var commentService service.CommentService
 
 		api.POST("/user", userService.Create)
 		api.DELETE("/user/:id", userService.Delete)
@@ -40,6 +43,8 @@ func main() {
 		api.PATCH("/comment/:id", commentService.Edit)
 		api.GET("/comment/:id", commentService.Get)
 	}
+
+	router.POST("/api/token", userService.Login)
 
 	router.Run() // listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")
 }
