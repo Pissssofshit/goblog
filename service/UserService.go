@@ -2,6 +2,7 @@ package service
 
 import (
 	param "goblog/Param"
+	"goblog/database"
 	"goblog/middleware"
 	"goblog/model"
 	"log"
@@ -11,10 +12,60 @@ import (
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type UserService struct {
 	user model.User
+}
+
+var db *gorm.DB
+
+func init() {
+	db = database.GetInstance()
+}
+
+func (userService *UserService) PostArticle(c *gin.Context) {
+
+	// claims, _ := c.Get("claims")
+
+	// intType := reflect.TypeOf(claims).Elem()
+	// intPtr2 := reflect.New(intType)
+	// // Same as above
+	// item := intPtr2.Elem().Interface().(middleware.CustomClaims)
+
+	// for i := 0; i < claims.Elem().NumField(); i++ {
+	// 	p := alias.Elem().Field(i)
+	// 	p.SetString(params[i])
+	// }
+
+	//TODO
+	//从jwt中获取登录用户的信息
+	token := c.Request.Header.Get("token")
+
+	claim, _ := middleware.NewJWT().ParserToken(token)
+
+	userName := claim.Name
+
+	title := c.Query("title")
+	content := c.Query("content")
+
+	var user model.User
+
+	db.Where("name = ?", userName).First(&user)
+
+	err := db.Model(&user).Where("sdasda = sdasds").Association("Articles").Append(&model.Article{Title: title, Content: content})
+
+	if err != nil {
+		c.JSON(200, gin.H{
+			"message": err.Error(),
+		})
+	}
+
+	c.JSON(200, gin.H{
+		"message": "success",
+	})
+
 }
 
 func (userService *UserService) Create(c *gin.Context) {
@@ -23,10 +74,28 @@ func (userService *UserService) Create(c *gin.Context) {
 	var user model.User
 	user.Name = username
 	user.Password = password
-	user.Create()
+	err := user.Create()
+
+	if err != nil {
+		c.JSON(200, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	var token string
+	token, err = generateToken(c, user)
+
+	if err != nil {
+		c.JSON(200, gin.H{
+			"error": err,
+		})
+		return
+	}
 	c.JSON(200, gin.H{
 		"username": username,
 		"password": password,
+		"token":    token,
 	})
 }
 
@@ -34,7 +103,19 @@ func (user *UserService) Delete(c *gin.Context) {
 }
 func (user *UserService) Edit(c *gin.Context) {
 }
-func (user *UserService) Get(c *gin.Context) {
+func (userService *UserService) Get(c *gin.Context) {
+	userName := c.Param("username")
+	var user model.User
+	not_found := (&user).Get(userName)
+	if not_found {
+		c.JSON(200, gin.H{
+			"user": nil,
+		})
+	}
+
+	c.JSON(200, gin.H{
+		"user": user,
+	})
 }
 
 // 定义登陆逻辑
@@ -46,7 +127,16 @@ func (userService *UserService) Login(c *gin.Context) {
 		user, isPass := userService.user.LoginCheck(loginReq)
 		// 验证通过后为该次请求生成token
 		if isPass {
-			generateToken(c, user)
+			token, err := generateToken(c, user)
+			if err == nil {
+				c.JSON(http.StatusOK, gin.H{
+					"token": token,
+				})
+			} else {
+				c.JSON(http.StatusOK, gin.H{
+					"message": err.Error(),
+				})
+			}
 		} else {
 			c.JSON(http.StatusOK, gin.H{
 				"status": -1,
@@ -58,7 +148,7 @@ func (userService *UserService) Login(c *gin.Context) {
 	} else {
 		c.JSON(http.StatusOK, gin.H{
 			"status": -1,
-			"msg":    "用户数据解析失败",
+			"msg":    "登录参数缺失",
 			"data":   nil,
 		})
 	}
@@ -66,7 +156,7 @@ func (userService *UserService) Login(c *gin.Context) {
 
 // token生成器
 // md 为上面定义好的middleware中间件
-func generateToken(c *gin.Context, user model.User) {
+func generateToken(c *gin.Context, user model.User) (string, error) {
 	// 构造SignKey: 签名和解签名需要使用一个值
 	j := middleware.NewJWT()
 
@@ -74,9 +164,9 @@ func generateToken(c *gin.Context, user model.User) {
 	claims := middleware.CustomClaims{
 		user.Name,
 		jwt.StandardClaims{
-			NotBefore: int64(time.Now().Unix() - 1000), // 签名生效时间
-			ExpiresAt: int64(time.Now().Unix() + 3600), // 签名过期时间
-			Issuer:    "goblog",                        // 签名颁发者
+			NotBefore: int64(time.Now().Unix() - 1000),    // 签名生效时间
+			ExpiresAt: int64(time.Now().Unix() + 3600*30), // 签名过期时间
+			Issuer:    "goblog",                           // 签名颁发者
 		},
 	}
 
@@ -84,26 +174,12 @@ func generateToken(c *gin.Context, user model.User) {
 	token, err := j.CreateToken(claims)
 
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"status": -1,
-			"msg":    err.Error(),
-			"data":   nil,
-		})
+		return "", err
 	}
 
 	log.Println(token)
-	// 封装一个响应数据,返回用户名和token
-	data := LoginResult{
-		Name:  user.Name,
-		Token: token,
-	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"status": 0,
-		"msg":    "登陆成功",
-		"data":   data,
-	})
-	return
+	return token, nil
 
 }
 
@@ -117,6 +193,11 @@ type ArticleService struct {
 }
 
 func (articleService *ArticleService) Create(c *gin.Context) {
+	claims, _ := c.Get("claims")
+
+	c.JSON(200, gin.H{
+		"claims": claims,
+	})
 }
 
 func (articleService *ArticleService) Delete(c *gin.Context) {

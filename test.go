@@ -2,13 +2,18 @@ package main
 
 import (
 	"fmt"
-	"goblog/model"
+	"goblog/middleware"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
 
 func main() {
+	var model middleware.CustomClaims
+	model.Name = "黄枭帅"
+	var inter interface{}
+	inter = model
+
 	dsn := "root:root@tcp(127.0.0.1:8889)/blog_service?charset=utf8mb4&parseTime=True&loc=Local"
 	db, _ := gorm.Open(mysql.Open(dsn), &gorm.Config{})
 

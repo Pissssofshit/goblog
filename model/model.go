@@ -1,6 +1,8 @@
 package model
 
 import (
+	"errors"
+	"fmt"
 	param "goblog/Param"
 	"goblog/database"
 
@@ -22,7 +24,7 @@ func init() {
 
 func (user *User) LoginCheck(loginParam param.LoginParam) (User, bool) {
 	var result User
-	db_init.Where("name = ? and pass_word = ?", loginParam.Username, loginParam.Password).First(&result)
+	db_init.Where("name = ? and password = ?", loginParam.Username, loginParam.Password).First(&result)
 
 	if result.Name == loginParam.Username {
 		return result, true
@@ -30,9 +32,27 @@ func (user *User) LoginCheck(loginParam param.LoginParam) (User, bool) {
 	return User{}, false
 }
 
-func (user *User) Create() {
-	db := database.GetInstance()
-	db.Create(user)
+func (user *User) Create() error {
+	var count int64
+	db_init.Model(user).Where("name = ?", user.Name).Count(&count)
+	if count != 0 {
+		return fmt.Errorf("已存在同名用户")
+	}
+
+	result := db_init.Create(user)
+	if result.RowsAffected == 0 {
+		return result.Error
+	}
+	return nil
+}
+
+func (user *User) Get(userName string) bool {
+	result := db_init.Where("name = ?", userName).First(user)
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		return true
+	}
+	db_init.Model(&user).Association("Articles").Find(&user.Articles)
+	return false
 }
 
 type Article struct {
