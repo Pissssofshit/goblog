@@ -22,6 +22,13 @@ func init() {
 	db_init = database.GetInstance()
 }
 
+// func (user *User) BeforeDelete(tx *gorm.DB) (err error) {
+// 	// result := tx.Where("author_id = ?", user.ID).Delete(&Article{})
+// 	// result := tx.Model(&user).Association("Articles").Delete()
+// 	// result := tx.Select("Articles").Delete(user)
+
+// 	return result.Error
+// }
 func (user *User) LoginCheck(loginParam param.LoginParam) (User, bool) {
 	var result User
 	db_init.Where("name = ? and password = ?", loginParam.Username, loginParam.Password).First(&result)

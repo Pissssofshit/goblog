@@ -22,7 +22,6 @@ func main() {
 
 	var userService service.UserService
 	var articleService service.ArticleService
-	var commentService service.CommentService
 
 	api := router.Group("/api")
 
@@ -35,17 +34,14 @@ func main() {
 		api.DELETE("/article/:id", articleService.Delete)
 		api.PATCH("/article/:id", articleService.Edit)
 
-		api.POST("/comment", commentService.Create)
-		api.DELETE("/comment/:id", commentService.Delete)
-		api.PATCH("/comment/:id", commentService.Edit)
 	}
 
+	//todo 这个奇怪的写法
 	api2 := router.Group("/api")
 	{
 		api2.GET("/article/:id", articleService.Get)
 		api2.GET("/user/:username", userService.Get)
 		api2.POST("/user", userService.Create)
-		api2.GET("/comment/:id", commentService.Get)
 	}
 
 	router.POST("/api/token", userService.Login)

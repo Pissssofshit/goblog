@@ -5,6 +5,8 @@ go 1.15
 require (
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/gin-gonic/gin v1.6.3
+	github.com/go-playground/validator v9.31.0+incompatible
+	github.com/go-playground/validator/v10 v10.2.0
 	github.com/sirupsen/logrus v1.7.0
 	golang.org/x/tools/gopls v0.5.2 // indirect
 	gorm.io/driver/mysql v1.0.3

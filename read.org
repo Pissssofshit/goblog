@@ -329,20 +329,54 @@ CREATE TABLE `articles` (
    | 更新文章 | PUT | /article/:id |
    | 删除文章 | delete | /article/:id |
 * 接口
-*** 路由
-**** 路由实现
-**** gin路由组源码分析
-*** 参数校验
-**** gin自带的校验器
-**** 自定义校验器
-*** 数据库操作
-*** 中间件
-**** api鉴权
-***** oauth2.0和jwt协议
-***** jwt-go
-*** swagger
+** 路由
+*** 路由实现
+*** gin路由组源码分析
+** 参数校验
+*** gin参数校验器
+定义参数结构:
+#+begin_src go
+type Param struct {
+	param1 time.Time `form:"param_form" json:"param_json" uri:"param_uri" binding:"tag1,tag2"`
+}
+#+end_src
+后面的参数分为两大类
+| 参数类型                             | 参数名                                              | 参数值 |
+| 定义从何种绑定的类型中获取到相应的值 | form(表单)，json(json体)，uri（绑定的动态路由参数） | 自定义    |
+| 绑定校验器                          | binding                                             | 自带的或自定义的校验器（tag） |
+更详细的请查看文档
+[[https://godoc.org/github.com/go-playground/validator][validator文档]]
+*** 自定义校验器
+自定义校验器定义如下
+#+begin_src go
+func(fl validator.FieldLevel) bool 
+#+end_src
+举例如下
+#+begin_src go
+type Booking struct {
+	CheckIn  time.Time `form:"check_in" binding:"required,bookabledate" time_format:"2006-01-02"`
+	CheckOut time.Time `form:"check_out" binding:"required,gtfield=CheckIn" time_format:"2006-01-02"`
+}
+
+var bookableDate validator.Func = func(fl validator.FieldLevel) bool {
+	date, ok := fl.Field().Interface().(time.Time)
+	if ok {
+		today := time.Now()
+		if today.After(date) {
+			return false
+		}
+	}
+	return true
+}
+#+end_src
+** 数据库
+** 中间件
+*** api鉴权
+**** oauth2.0和jwt协议
+**** jwt-go
+** swagger
 * 日志
-*** 日志分级
-*** 日志标准化
-*** 日志格式化和输出
-*** 日志分级输出
+** 日志分级
+** 日志标准化
+** 日志格式化和输出
+** 日志分级输出

@@ -17,6 +17,7 @@ import (
 
 type UserService struct {
 	user model.User
+	db   *gorm.DB
 }
 
 var db *gorm.DB
@@ -25,19 +26,14 @@ func init() {
 	db = database.GetInstance()
 }
 
+func NewUserService() UserService {
+	var userService UserService
+	userService.res = param.NewResponseStruct()
+	userService.db = database.GetInstance()
+	return userService
+}
+
 func (userService *UserService) PostArticle(c *gin.Context) {
-
-	// claims, _ := c.Get("claims")
-
-	// intType := reflect.TypeOf(claims).Elem()
-	// intPtr2 := reflect.New(intType)
-	// // Same as above
-	// item := intPtr2.Elem().Interface().(middleware.CustomClaims)
-
-	// for i := 0; i < claims.Elem().NumField(); i++ {
-	// 	p := alias.Elem().Field(i)
-	// 	p.SetString(params[i])
-	// }
 
 	//TODO
 	//从jwt中获取登录用户的信息
@@ -68,54 +64,84 @@ func (userService *UserService) PostArticle(c *gin.Context) {
 
 }
 
+type CreateUserParam struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
 func (userService *UserService) Create(c *gin.Context) {
-	username := c.Query("username")
-	password := c.Query("password")
+	var json CreateUserParam
+
+	response := param.NewResponseStruct()
+	if err := c.ShouldBindJSON(&json); err != nil {
+		response.Code = 1
+		response.Msg = err.Error()
+		c.JSON(http.StatusBadRequest, response)
+		return
+	}
 	var user model.User
-	user.Name = username
-	user.Password = password
+	user.Name = json.Username
+	user.Password = json.Password
 	err := user.Create()
 
 	if err != nil {
-		c.JSON(200, gin.H{
-			"error": err.Error(),
-		})
-		return
+		response.Msg = err.Error()
+	} else {
+		var token string
+		token, err = generateToken(c, user)
+
+		if err != nil {
+			response.Msg = err.Error()
+			response.Code = 1
+		}
+		response.Data["token"] = token
+		response.Data["username"] = user.Name
 	}
 
-	var token string
-	token, err = generateToken(c, user)
-
-	if err != nil {
-		c.JSON(200, gin.H{
-			"error": err,
-		})
-		return
-	}
-	c.JSON(200, gin.H{
-		"username": username,
-		"password": password,
-		"token":    token,
-	})
+	c.JSON(200, response)
 }
 
-func (user *UserService) Delete(c *gin.Context) {
+func (userService *UserService) Delete(c *gin.Context) {
+	token := c.Request.Header.Get("token")
+
+	claim, _ := middleware.NewJWT().ParserToken(token)
+
+	userName := claim.Name
+
+	var user model.User
+	user.Name = userName
+	db.First(&user)
+	db.Select("Articles").Delete(&user)
+	response := param.NewResponseStruct()
+	c.JSON(200, response)
 }
+
 func (user *UserService) Edit(c *gin.Context) {
 }
+
+type QueryUserParam struct {
+	UserName string `uri:"username" binding:"required"`
+}
+
 func (userService *UserService) Get(c *gin.Context) {
-	userName := c.Param("username")
-	var user model.User
-	not_found := (&user).Get(userName)
-	if not_found {
-		c.JSON(200, gin.H{
-			"user": nil,
-		})
+
+	var queryUserParam QueryUserParam
+
+	response := param.NewResponseStruct()
+	if err := c.ShouldBindUri(&queryUserParam); err != nil {
+		response.Code = 1
+		response.Msg = err.Error()
+		c.JSON(http.StatusBadRequest, response)
+		return
 	}
 
-	c.JSON(200, gin.H{
-		"user": user,
-	})
+	var user model.User
+	not_found := (&user).Get(queryUserParam.UserName)
+	if !not_found {
+		response.Data["user"] = user
+	}
+
+	c.JSON(200, response)
 }
 
 // 定义登陆逻辑
